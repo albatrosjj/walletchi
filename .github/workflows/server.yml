@@ -1,0 +1,51 @@
+name: server
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - "contracts/abi/**"
+      - ".github/workflows/server.yml"
+  push:
+    paths:
+      - "server/**"
+      - "contracts/abi/**"
+      - ".github/workflows/server.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Prisma client is generated code; tsc cannot typecheck src/store/prisma.ts without it.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # In-memory store + MockChain, no Postgres or secrets needed (see server/README.md).
+      - name: Smoke test
+        run: npm run smoke
